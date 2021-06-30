@@ -1,4 +1,3 @@
-# parity-project-1
 
 ## Goal
 
