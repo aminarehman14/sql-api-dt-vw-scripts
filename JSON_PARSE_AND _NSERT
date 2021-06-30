@@ -1,0 +1,164 @@
+
+
+USE [WeatherDatabase]
+GO
+
+DECLARE	@return_value int,
+		@ResponseText varchar(8000),
+		@value nvarchar(MAX)
+
+EXEC	@return_value = [Weather].[GetWeatherData]
+		@lat = N'38.5767', --enter center point lat and long 
+		@lon = N'-92.1735',
+		@count = N'10', -- count how many cities you want to return
+		@ResponseText = @ResponseText OUTPUT
+		
+
+SELECT	@ResponseText as N'@ResponseText'
+
+IF((Select @ResponseText) <> '')
+BEGIN
+BEGIN TRANSACTION
+	--api response 
+     DECLARE @json NVARCHAR(MAX) = (Select @ResponseText)
+	 DECLARE @message NVARCHAR(50) 
+	 DECLARE @cod nvarchar(50)
+	 DECLARE @count nvarchar(50) 
+	 DECLARE @rootid int
+	 DECLARE @listpk int
+	 DECLARE @list_id int
+	 DECLARE @name nvarchar(50) 
+	 DECLARE @dt NVARCHAR(50)
+	 DECLARE @country NVARCHAR(250) 
+	 DECLARE @err_msg NVARCHAR(50) 
+	 DECLARE @lat NVARCHAR(50)
+	 DECLARE @lon NVARCHAR(50) 
+	 DECLARE @temp nvarchar(25)
+	 DECLARE @feels_like nvarchar(25)
+	 DECLARE @temp_min nvarchar(25)
+	 DECLARE @temp_max nvarchar(25)
+	 DECLARE @pressure nvarchar(25)
+	 DECLARE @humidity nvarchar(25)
+	 DECLARE @weather_id int
+	 DECLARE @weather_main nvarchar(2500)
+	 DECLARE @description nvarchar(2500)
+	 DECLARE @icon nvarchar(4000)
+	 DECLARE @speed nvarchar(50)
+	 DECLARE @deg int
+
+	 --parse json into usable values
+	 --get root
+
+		 SELECT [message], [cod], [count], --root table
+				[list_id], [name], [dt], [country], --list table
+				[temp], [feels_like], [temp_min], [temp_max], [pressure], [humidity],  --main table
+				[lat], [lon], --coord table
+				[weather_id], [weather_main], [description], [icon], --weather table
+				[speed], [deg] -- wind table
+				into #Results
+		 FROM OPENJSON(@json)
+			  WITH (
+					 message NVARCHAR(30) '$.message',
+					 cod NVARCHAR(50) '$.cod',
+					 count NVARCHAR(50) '$.count',
+					 list NVARCHAR(MAX) AS JSON 
+		 )
+
+	--get list object nested jsons as json
+	cross apply OPENJSON(list)
+		with (
+		list_id int '$.id', 
+		name NVARCHAR(50) '$.name', 
+		coord NVARCHAR(MAX) as JSON,
+		main NVARCHAR(MAX) as JSON,
+		dt int '$.dt', 
+		wind NVARCHAR(MAX) as JSON, 
+		country NVARCHAR(250) '$.sys.country' , 
+		weather NVARCHAR(MAX) as JSON
+		)
+	--get coords
+	cross apply OPENJSON(coord)
+		with (
+		lat NVARCHAR(50) '$.lat', 
+		lon NVARCHAR(50) '$.lon'
+		)
+	--get main
+	cross apply OPENJSON(main)
+		with (
+		temp NVARCHAR(50) '$.temp', 
+		feels_like NVARCHAR(50) '$.feels_like', 
+		temp_min NVARCHAR(50) '$.temp_min', 
+		temp_max NVARCHAR(50) '$.temp_max', 
+		pressure NVARCHAR(50) '$.pressure', 
+		humidity NVARCHAR(50) '$.humidity'
+		)
+		--get wind
+	cross apply OPENJSON(wind)
+		with (
+		speed NVARCHAR(50) '$.speed', 
+		deg NVARCHAR(50) '$.deg'
+		)
+		--get weather
+	cross apply OPENJSON(weather)
+	WITH (
+	weather_id int '$.id', 
+	weather_main NVARCHAR(150) '$.main', 
+	description NVARCHAR(2500) '$.description', 
+	icon NVARCHAR(4000) '$.icon'
+	)
+
+---insert root table 	
+	select @message = [message], @cod = [cod], @count = [count]  from #Results 
+	exec @rootid = [Weather].[usp_InsertRoot] @message, @cod, @count
+
+
+	declare record_cursor CURSOR for 
+		select [list_id], [name], [dt],[country], --list table 
+		[lat], [lon], --coord table
+		[temp] ,[feels_like], [temp_min] ,[temp_max] ,[pressure] , [humidity], --main table
+		[weather_id] ,[weather_main] ,[description] ,[icon], --weather table 
+		[speed], [deg] --wind table
+		from #Results
+	--open cursor
+	open record_cursor
+	--loop through cursor
+	FETCH NEXT FROM record_cursor INTO @list_id, @name, @dt, @country, 
+										@lat, @lon ,@temp ,@feels_like, @temp_min ,@temp_max ,@pressure ,@humidity,
+										@weather_id ,@weather_main ,@description ,@icon, 
+										@speed, @deg
+	while @@FETCH_STATUS = 0 
+	BEGIN
+	--- insert list table 
+		exec @listpk = [Weather].[usp_InsertList] @rootid, @list_id, @name, @dt, @country 
+
+	--- insert coord table 
+		exec @err_msg =  [Weather].[usp_InsertCoord] @listpk, @lat, @lon 
+
+	--- insert main table 
+		exec @err_msg =  [Weather].[usp_InsertMain] @listpk	,@temp ,@feels_like	,@temp_min ,@temp_max ,@pressure ,@humidity
+	
+	-- insert weather
+		exec @err_msg = [Weather].[usp_InsertWeather] @listpk , @weather_id ,@weather_main ,@description ,@icon
+	
+	-- insert wind 
+		exec @err_msg = [Weather].[usp_InsertWind] @listpk, @speed, @deg
+
+		FETCH NEXT FROM record_cursor INTO @list_id, @name, @dt, @country, 
+										@lat, @lon ,@temp ,@feels_like, @temp_min ,@temp_max ,@pressure ,@humidity,
+										@weather_id ,@weather_main ,@description ,@icon,
+										@speed, @deg
+
+	END
+	--close and deallocate 
+	CLOSE record_cursor
+	DEALLOCATE record_cursor
+	select * from #RESULTS
+	drop table #Results
+COMMIT 
+END
+ELSE
+BEGIN
+     DECLARE @ErroMsg NVARCHAR(30) = 'No data found.';
+     Print @ErroMsg;
+END
+--Exec sp_OADestroy @Object
