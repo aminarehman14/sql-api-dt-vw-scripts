@@ -1,9 +1,4 @@
 
-## Goal
-
-The goal of this project is to determine how you approach solving data and code
-problems. 
-
 ## Deliverables
 
 Download some weather data (from individual weather
