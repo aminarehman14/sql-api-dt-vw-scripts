@@ -2,11 +2,11 @@
 ## Goal
 
 The goal of this project is to determine how you approach solving data and code
-problems. The project should not take more than four to eight hours to complete.
+problems. 
 
 ## Deliverables
 
-We would like you to download some weather data (from individual weather
+Download some weather data (from individual weather
 stations anywhere in the world - your choice - but must be from the same
 country!) using a script you author. There must be data from at least
 **10** locations that are all within the same country.
@@ -20,9 +20,9 @@ example, average rainfall or average humidity across the region of weather stati
 
 So in summary, at the very least you must provide:
 
-1. Data download script
-2. Data transformation script
-3. SQL table(s) storing the transformed data
+1. Data download script (GETWEATHER PROCEDURE)
+2. Data transformation script (PARSEJSON FILE) 
+3. SQL table(s) storing the transformed data (INSERT PROCEDURES)
 4. Data aggregation script
 5. SQL table(s) storing the newly aggregated data
 
@@ -30,7 +30,7 @@ So in summary, at the very least you must provide:
 
 Get free weather data using the [OpenWeather API](https://openweathermap.org/api).
 
-We will provide you with an API key for use during this project.
+API key for use during this project.
 
 Example API call:
 
@@ -86,15 +86,4 @@ This should give you a response similar to:
 }
 ```
 
-## Repository format
 
-Pick your own repository format (directories/folders, download scripts, SQL tables)
-
-## Rubric
-
-We will score your project on the following criteria:
-
-1. Organization
-2. Readability
-3. Scalability
-4. Performance
